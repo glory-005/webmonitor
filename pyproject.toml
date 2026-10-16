@@ -1,0 +1,85 @@
+[project]
+name = "webmoniter"
+version = "0.1.0"
+description = "网页变更实时监控，支持飞书/钉钉通知"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "morenqing" }]
+requires-python = ">=3.12"
+dependencies = [
+    # 调度：钉 3.x，4.0 目前仍是 pre-release 且 API 大改
+    "apscheduler>=3.10,<4",
+    # HTTP 抓取
+    "httpx[http2]>=0.27",
+    # HTML 解析
+    "beautifulsoup4>=4.12",
+    # 配置与校验
+    "pydantic>=2.9",
+    "pydantic-settings>=2.5",
+    "pyyaml>=6.0",
+    # 直接用于把 .env 注入 os.environ（渠道扫描 / cookies_env 需要）
+    "python-dotenv>=1.0",
+    # 存储
+    "aiosqlite>=0.20",
+    # Windows 上 zoneinfo 没有系统时区库，必须靠 tzdata 提供 Asia/Shanghai
+    "tzdata>=2024.1; sys_platform == 'win32'",
+    # CLI / 日志 / 重试
+    "typer>=0.15",
+    "rich>=13.9",
+    "loguru>=0.7",
+    "tenacity>=9.0",
+]
+
+[project.optional-dependencies]
+# 需要 JS 动态渲染时：uv sync --extra browser && uv run playwright install chromium
+browser = ["playwright>=1.49"]
+# 让 BeautifulSoup 用更快的 lxml 解析器（targets.yaml 里把 parser 改成 lxml）
+fastparse = ["lxml>=5.3"]
+
+# uv 原生开发依赖组：默认装（uv sync），生产用 uv sync --no-dev
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "ruff>=0.8",
+    "mypy>=1.14",
+    "types-pyyaml",
+]
+
+[project.scripts]
+webmoniter = "webmoniter.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/webmoniter"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.lint.flake8-bugbear]
+# CLI 惯用法：typer.Option/Argument(...) 作为函数默认值，B008 对其放行
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
+[tool.ruff.lint.isort]
+# 不显式声明的话 ruff 会把 tests 当成第三方包，导致 import 分组顺序要求反直觉
+known-first-party = ["webmoniter", "tests"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+ignore_missing_imports = true

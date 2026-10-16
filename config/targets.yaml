@@ -1,0 +1,113 @@
+# 网页变更监控目标配置。改这个文件即可增删监控，不用动代码。
+#
+# 抽取规则 type:
+#   css   —— BeautifulSoup 的 CSS 选择器（soupsieve 语法，支持 div.a > ul li:nth-of-type(2)）
+#            mode: text(默认) 取可见文本 / html 取内部 HTML / attr 取某个属性(需 attr: href)
+#   regex —— 对原始 HTML 做正则，group 指定取第几个捕获组
+#   json   —— 接口类页面，path 支持 a.b[0].c 形式的路径
+#
+# 没有 extract 规则时，比对整页可见文本（噪声大，只建议在结构极简单的页面用）
+
+defaults:
+  interval: 300            # 检查间隔（秒）
+  jitter: 30               # 随机抖动，避免整点惊群
+  timeout: 20              # 单次请求超时（秒）
+  parser: html.parser      # 装了 fastparse extra 后可改 lxml（更快）
+  diff:
+    strip_selectors:       # 抽取前先摘掉的节点
+      - script
+      - style
+      - noscript
+      - "#comment"
+      - .ad
+    ignore_regex:          # 命中即从文本中抹掉，用于过滤天然抖动的噪声
+      - 'csrf[_-]?token["'']?\s*[:=]\s*["''][^"'']+'
+      - '\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}'   # 页面渲染时间戳
+      - 'request[_-]?id["'']?\s*[:=]\s*["''][\w-]+'
+      - '访问量[:：]\s*\d+'
+    min_changed_chars: 5        # 变化字符数小于此值视为噪声
+    similarity_threshold: 0.995 # 相似度高于此值视为排版抖动
+  notify:
+    channels: [feishu_ops]
+    on: [changed, error, recovered]   # 可选 changed / error / recovered
+    error_after_consecutive: 3  # 连续失败 N 次才告警
+    mention_all_keywords: []    # 新增内容命中这些词时 @所有人
+
+targets:
+  # ---- 今日内江（内江市人民政府 · 要闻动态）----
+  # 实测（tools/inspect_page.py）：HTTP 200、35KB、标题「今日内江_内江市人民政府」
+  # 列表容器 #list-data > ul.list，每页 8 条，条目里带「10月15日」式日期
+  - id: neijiang_jrgz
+    name: 今日内江
+    url: https://www.neijiang.gov.cn/njs/bdyw/jrgz_list.shtml
+    interval: 600            # 该栏目一天更新数次，10 分钟足够且不失礼
+    headers:
+      User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      Referer: "https://www.neijiang.gov.cn/"
+    extract:
+      - type: css
+        selector: "#list-data > ul.list"
+        mode: text
+    notify:
+      channels: [feishu_ops]
+      mention_all_keywords: ["招标", "中标", "任免", "公示"]
+
+  # ---- 临时演练：验证「检测到变化 → 真的收到通知」整条链路（验证完请删除）----
+  # 这个接口每次返回的时间戳都不同，所以建立基线后的下一轮必然判为变更。
+  # 步骤：取消下面注释 → `webmoniter check drill_clock`（建基线）→ `webmoniter run`
+  #      → 一分钟内应收到飞书通知 → 收到后把这段删掉。
+  # 备选接口（同样每次变化）：https://quan.suning.com/getSysTime.do → json path: sysTime2
+  # - id: drill_clock
+  #   name: 链路演练（时间戳接口）
+  #   url: https://api.m.taobao.com/rest/api3.do?api=mtop.common.getTimestamp
+  #   interval: 60
+  #   extract:
+  #     - type: json
+  #       path: data.t
+  #   notify:
+  #     channels: [feishu_ops]
+  #     on: [changed]
+
+  # ---- 示例 2：只关心某个字段 ----
+#  - id: price_watch
+#    name: 价格监控
+#    url: https://example.com/product/123
+#    interval: 600
+#    extract:
+#      - type: css
+#        selector: "#price"
+#        mode: text
+#      - type: regex
+#        pattern: '库存[:：]\s*(\d+)'
+#        group: 1
+
+  # ---- 示例 3：接口返回 JSON ----
+#  - id: api_status
+#    name: 服务状态接口
+#    url: https://example.com/api/v1/status
+#    interval: 60
+#    extract:
+#      - type: json
+#        path: data.services[0].status
+
+  # ---- 示例 4：JS 动态渲染（需 uv sync --extra browser）----
+  # - id: spa_page
+  #   name: 需渲染页面
+  #   url: https://example.com/spa
+  #   fetch: browser
+  #   wait_for: "div.data-loaded"     # 等到该选择器出现再取内容
+  #   extract:
+  #     - type: css
+  #       selector: "#price"
+  #   notify:
+  #     channels: [feishu_ops]
+  #     on: [changed, error, recovered]
+  #
+  # ---- 示例 5：需要登录态的页面 ----
+  # - id: inner_page
+  #   name: 内网页面
+  #   url: https://intranet.example.com/board
+  #   cookies_env: INTRANET_COOKIE   # 值放在 .env，不进 YAML
+  #   extract:
+  #     - type: css
+  #       selector: "table.board"

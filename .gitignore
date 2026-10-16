@@ -1,0 +1,34 @@
+# ---- Python / uv ----
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 密钥：绝不允许提交 ----
+.env
+.env.*
+!.env.example
+
+# ---- 运行时产物 ----
+data/
+logs/
+
+# ---- 排查用的输出文件（仅根目录）----
+/ruff.txt
+/pytest.txt
+/doctor.txt
+/sync.txt
+/help.txt
+/targets.txt
+/inspect*.txt
+*.report.txt
+pytest-of-*/
+
+# ---- 编辑器 / 系统 ----
+# PyCharm 本地配置。想共享工程配置就把这行删掉（.idea/.gitignore 已忽略最吵的 workspace.xml）
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 这个项目有 Windows 专属处理（tzdata 时区、GBK 控制台、console script），
+        # 所以两个平台都跑，任何一个红都说明有问题
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+
+      - name: 安装依赖（严格按 uv.lock）
+        # --locked 会在 uv.lock 与 pyproject.toml 不一致时直接失败，
+        # 避免「改了依赖却忘了 uv lock」
+        run: uv sync --locked
+
+      - name: Lint（ruff）
+        run: uv run ruff check .
+
+      - name: 测试（pytest）
+        run: uv run pytest -q
+
+      - name: CLI 冒烟
+        # 覆盖 console script 入口、Typer 参数声明与 GBK 安全输出符号
+        run: uv run webmoniter --help

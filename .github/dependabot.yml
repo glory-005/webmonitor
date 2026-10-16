@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # 让 CI 里钉住的 action SHA 不至于过期（ci.yml 用的是固定 SHA，需要有人来升）
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"
+
+  # Python 依赖（读 pyproject.toml + uv.lock）
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
